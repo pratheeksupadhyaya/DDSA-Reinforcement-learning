@@ -28,8 +28,8 @@ class Node(object):
         #             self.action_space.append((i, j))
         # self.action_space = np.array(self.action_space)
         # print(self.action_space)
-        self.epsilon = 0.1
-        self.epsilon_decay = 1
+        self.epsilon = 0.9
+        self.epsilon_decay = 0.9
         self.epsilon_min = 0.1
         self.alpha = 0.1
         self.gamma = 0.9
@@ -241,7 +241,7 @@ class Node(object):
         transmission_time = packet_size / specBW[int(i), int(j), int(s), int(t)]  # in seconds
 
         time_to_transfer = math.ceil(transmission_time / num_sec_per_tau)  # in tau
-        print("Packet size:", packet_size, "Spec Band: ", specBW[int(i), int(j), int(s), int(t)], "Time to transfer: ", time_to_transfer)
+        # print("Packet size:", packet_size, "Spec Band: ", specBW[int(i), int(j), int(s), int(t)], "Time to transfer: ", time_to_transfer)
         return time_to_transfer, transmission_time
 
     # checks if a node has enough time to transfer
@@ -522,7 +522,8 @@ class Node(object):
                     message.curr = next  # update messages current node
                     nodes[next].handle_buffer_overflow(max_packets_in_buffer)
 
-                # print("message", message.ID, "packet:", message.packet_id, "sent to", next)
+                if int(message.ID) == debug_message:
+                    print("message", message.ID, "packet:", message.packet_id, "sent to", next)
                 return True
 
             else:
@@ -540,7 +541,7 @@ class Node(object):
     def send_message_qlearning(self, net, message, ts, specBW, LINK_EXISTS, next, s, transfer_time_in_sec): # q_learning only
         nodes = net.nodes
 
-        print("curr:", message.curr, "next:", next, "S:", s, "T:", ts)
+        # print("curr:", message.curr, "next:", next, "S:", s, "T:", ts)
         if LINK_EXISTS[int(nodes[message.curr].ID), int(nodes[next].ID), s, ts] == 1:
             if restrict_channel_access == True:
                 transceiver, channel_available = self.check_for_available_channel(self, nodes[next], ts, net, s, LINK_EXISTS, transfer_time_in_sec)
@@ -548,7 +549,7 @@ class Node(object):
                 channel_available = 0
                 transceiver = 0
 
-            print("node:", self.ID, "Transceiver:", transceiver, "Channel:", channel_available)
+            # print("node:", self.ID, "Transceiver:", transceiver, "Channel:", channel_available)
 
             if channel_available >= 0:
                 self.update_channel_occupancy(self, nodes[next], ts, net, s, channel_available, LINK_EXISTS, transfer_time_in_sec, transceiver)

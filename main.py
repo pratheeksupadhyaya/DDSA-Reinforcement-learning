@@ -21,10 +21,10 @@ for t in range(0, T, tau):
     net.network_GO(t, specBW, path_lines, spec_lines, msg_lines, LINK_EXISTS)
 
 #creates not_delivered.txt for overhead computation
-# net.not_delivered_messages()
+net.not_delivered_messages()
 
 # Handle messages that got delivered
-# net.messages_delivered()
+net.messages_delivered()
 
 # saves packets per tau and parallel communications
 # net.save_packets_per_tau()

@@ -326,6 +326,9 @@ class Network(object):
 
     def update_action_space(self, LINK_EXISTS, t):
         for node in self.nodes:
+            if (int(node.ID), -1) not in node.action_space:
+                node.action_space.append((int(node.ID), -1))
+                node.q_table.append(0)
             for s in range(numSpec):
                 nodes_in_range = find_nodes_in_range(node, self, s, LINK_EXISTS, t)
                 for neighbouring_node in nodes_in_range:
@@ -333,13 +336,22 @@ class Network(object):
                         node.action_space.append((int(neighbouring_node.ID), s))
                         node.q_table.append(0)
 
+    def calculate_farthest_node(self, x_coords, y_coords):
+        max_dist = -1
+        for i in range(len(self.nodes)):
+            for j in range(len(self.nodes)):
+                dist = euclideanDistance(x_coords[i],y_coords[i], x_coords[j], y_coords[j])
+                if dist > max_dist:
+                    max_dist = dist
+        return max_dist
+
     def network_GO(self, t, specBW, path_lines, spec_lines, msg_lines,
                    LINK_EXISTS):  # function that sends all messages at a given tau
         # clear all channels
         self.clear_all_channels()
         # activate/deactivate primary users
-        self.activate_primary_users()
-        self.handle_primary_user_interference(t)
+        # self.activate_primary_users()
+        # self.handle_primary_user_interference(t)
         # clear out old msgs that are past TTL
         self.clear_old_msgs(t)
         # Calculate energy consumption
@@ -355,12 +367,12 @@ class Network(object):
             for node in self.nodes:  # send all messages to their next hop
 
                 did_node_transmit = False
+                # print(node.buf)
                 for msg in node.buf:
 
                     if msg.last_sent < t:
                         if int(msg.ID) == debug_message:
-                            print("time:", t, "path:", msg.path)
-
+                            print("time:", t, " node", node.ID, " msg ", msg.ID, " path:", msg.path)
                         if len(msg.path) > 0 and '' not in msg.path:  # if the message still has a valid path
                             next = int(msg.path[len(msg.path) - 1])  # get next node in path
                             s = int(msg.bands[len(msg.bands) - 1])  # get band to use
@@ -375,8 +387,12 @@ class Network(object):
 
                             # check if there is enough time to send message packet
                             if limited_time_to_transfer == True:
+
                                 if node.mes_fwd_time_limit + transfer_time_in_sec <= (
                                         num_sec_per_tau * num_transceivers):
+                                    # if int(msg.ID) == debug_message:
+                                    #     print("[", node.ID, next, s, t, "]", LINK_EXISTS[int(node.ID), next, s, t])
+
                                     msg_sent = node.send_message_xchant(self, msg, t, specBW, LINK_EXISTS, next, s,
                                                                         transfer_time_in_sec)
 
@@ -407,80 +423,117 @@ class Network(object):
             alpha1 = 0.1
             alpha2 = 0.001
             alpha3 = 0.3
+            x_co_ordinates, y_co_ordinates = np.loadtxt('Nodes_Co_ordinates.txt', delimiter=',', usecols=(0, 1),
+                                                        unpack=True)
             self.update_action_space(LINK_EXISTS, t)
-
+            max_distance = self.calculate_farthest_node(x_co_ordinates, y_co_ordinates)
+            max_hops = max_distance / min(spectRange)
             for node in self.nodes:
                 did_node_transmit = False
-                print(node.action_space)
                 for msg in node.buf:
+
                     if msg.last_sent < t:
                         if int(msg.ID) == debug_message:
+                            print("Action space : ", node.action_space)
+                            # print(len(node.buf))
                             print("time:", t, "path:", msg.path)
                         nodes_in_range = []
 
                         # if len(msg.path) > 0 and '' not in msg.path:  # if the message still has a valid path P_comment : change to while with conditions being link exists and band available
                         action = self.q_learning_get_next_node_and_band(node)
                         next, s = node.action_space[action]
-                        print("Message ID: ", msg.ID, "Next: ", next, "Band: ", s)
+                        if int(msg.ID) == debug_message:
+                            print("Message ID: ", msg.ID, "Next: ", next, "Band: ", s)
 
-                        # Change s in between 0 and S
-                        # if s > 9:
-                        #     s = s % 10
-                        #     s = s - 1  # P_comment : Might not be required. Check this
+                        if (next == node.ID):
+                            reward = 0
+                        else:
+                            transfer_time, transfer_time_in_sec = node.compute_transfer_time(msg, s, specBW,
+                                                                                             msg.curr, next, t)
+                            max_delay = (max(M) / min(minBW))
+                            normalized_transfer_time_in_sec = (transfer_time_in_sec / max_delay)
 
-                        # if LINK_EXISTS[int(node.ID), int(next_node_id), s, t] == 1:
-                        #     transceiver, channel_available = node.check_for_available_channel(self, self.nodes[next],
-                        #                                                                       t, net, s,
-                        #                                                                       LINK_EXISTS,
-                        #                                                                       transfer_time_in_sec)
+                            # check if there is enough time to send message packet
+                            reward = 0
+                            if LINK_EXISTS[int(node.ID), next, s, t] != 1:
+                                reward = -1
+                            # else:
+                            #     reward = -0.5
 
-                        transfer_time, transfer_time_in_sec = node.compute_transfer_time(msg, s, specBW,
-                                                                                         msg.curr, next, t)
-                        max_delay = (packet_size / min(minBW))
-                        normalized_transfer_time_in_sec = 1 - (transfer_time_in_sec / max_delay)
+                            dist_to_des = euclideanDistance(x_co_ordinates[next], y_co_ordinates[next],
+                                                            x_co_ordinates[int(msg.des)], y_co_ordinates[int(msg.des)])
+                            dist_to_des_from_curr = euclideanDistance(x_co_ordinates[int(node.ID)], y_co_ordinates[int(node.ID)],
+                                                            x_co_ordinates[int(msg.des)], y_co_ordinates[int(msg.des)])
+                            normmalized_dist_to_des = dist_to_des / max_distance
+                            hops_to_des  = np.ceil((dist_to_des) / spectRange[s])
+                            normalized_hops_to_des = hops_to_des / max_hops
+                            queue_delay = len(self.nodes[next].buf)/maxBW[1]
+                            normalized_dist_difference = (dist_to_des_from_curr - dist_to_des) / dist_to_des_from_curr
 
-                        # check if there is enough time to send message packet
-                        if LINK_EXISTS[int(node.ID), next, s, t] != 1:
-                            reward = -1
-                        if limited_time_to_transfer == True:
-                            if node.mes_fwd_time_limit + transfer_time_in_sec <= (
-                                    num_sec_per_tau * num_transceivers):
-                                print("Time sufficient to send message at t = ", t, "Transfer time = ", transfer_time_in_sec, "Band: ",s)
+                            if limited_time_to_transfer == True:
+                                if node.mes_fwd_time_limit + transfer_time_in_sec <= (
+                                        num_sec_per_tau * num_transceivers):
+                                    # print("Time sufficient to send message at t = ", t, "Transfer time = ", transfer_time_in_sec, "Band: ",s)
 
+                                    msg_sent = node.send_message_qlearning(self, msg, t, specBW, LINK_EXISTS, next, s,
+                                                                           transfer_time_in_sec)
+
+                                    # if msg was sent add the amount of packets sent set flag of a node transmitting to true
+
+                                    if msg_sent == True:
+                                        node.mes_fwd_time_limit += transfer_time_in_sec
+                                        self.packets_per_tau += 1
+                                        # P_comment: Link exists required. If link does not exist then reward should reflect that. No point in including the delay for nodes which are not connected.
+                                        # P_comment: Should this be included inside msg_sent == True ?
+                                        # reward = (normalized_transfer_time_in_sec) + (spectRange[s]/max(spectRange)) + LINK_EXISTS[
+                                        #     int(node.ID), next, s, t] + 1 # 1 is for channel availability
+                                        # reward = (normalized_transfer_time_in_sec) + (
+                                        #             1 - np.exp(- dist_to_des / max(spectRange))) + \
+                                        #          LINK_EXISTS[int(node.ID), next, s, t] + 1
+                                        reward = np.exp(-(queue_delay)) + np.exp(-np.ceil(dist_to_des/spectRange[s])) + np.exp(-(transfer_time_in_sec))
+                                        did_node_transmit = True
+
+                            else:
                                 msg_sent = node.send_message_qlearning(self, msg, t, specBW, LINK_EXISTS, next, s,
                                                                        transfer_time_in_sec)
 
                                 # if msg was sent add the amount of packets sent set flag of a node transmitting to true
                                 if msg_sent == True:
-                                    node.mes_fwd_time_limit += transfer_time_in_sec
-                                    self.packets_per_tau += 1
                                     # P_comment: Link exists required. If link does not exist then reward should reflect that. No point in including the delay for nodes which are not connected.
-                                    # P_comment: Should this be included inside msg_sent == True ?
-                                    reward = (normalized_transfer_time_in_sec) + (alpha2 * spectRange[s]) + LINK_EXISTS[
-                                        int(node.ID), next, s, t] + 1 # 1 is for channel availability
 
+                                    # P_comment : Working reward function
+                                    # reward = np.exp(-np.ceil(dist_to_des / spectRange[s])) + np.exp(-(transfer_time_in_sec))
+
+                                    # reward = np.log((1 - normalized_hops_to_des )/normalized_hops_to_des) + np.log((1 - normalized_transfer_time_in_sec) / normalized_transfer_time_in_sec)
+                                    reward = np.tanh(normalized_dist_difference) + np.tanh(1-normalized_transfer_time_in_sec)
+                                    # reward = (1 - normalized_transfer_time_in_sec) + normalized_dist_difference
+                                    self.packets_per_tau += 1
                                     did_node_transmit = True
 
-                        else:
-                            msg_sent = node.send_message_qlearning(self, msg, t, specBW, LINK_EXISTS, next, s,
-                                                                   transfer_time_in_sec)
+                        if int(msg.ID) == debug_message:
+                            print("Reward: ", reward)
+                            print("Dist diff: ", normalized_dist_difference, " Trans Time:",
+                                  normalized_transfer_time_in_sec)
 
-                            # if msg was sent add the amount of packets sent set flag of a node transmitting to true
-                            if msg_sent == True:
-                                # P_comment: Link exists required. If link does not exist then reward should reflect that. No point in including the delay for nodes which are not connected.
-                                # P_comment: Should this be included inside msg_sent == True ?
-                                reward = (normalized_transfer_time_in_sec) - (alpha2 * spectRange[s]) + LINK_EXISTS[
-                                    int(node.ID), next, s, t] + 1
-
-                                self.packets_per_tau += 1
-                                did_node_transmit = True
+                            for next1, band1 in node.action_space:
+                                dist_to_des1 = euclideanDistance(x_co_ordinates[next1], y_co_ordinates[next1],
+                                                                x_co_ordinates[int(msg.des)],
+                                                                y_co_ordinates[int(msg.des)])
+                                queue_delay1 = len(self.nodes[next1].buf) / maxBW[1]
+                                transfer_time1, transfer_time_in_sec1 = node.compute_transfer_time(msg, band1, specBW,
+                                                                                                 msg.curr, next1, t)
+                                reward1 = np.exp(-(queue_delay1)) + np.exp(-np.ceil(dist_to_des1/spectRange[s])) + np.exp(-(transfer_time_in_sec1))
+                                print("Action <", next1, band1, "> Q:", queue_delay1, " D: ", dist_to_des1, "R: ", reward1)
+                            print("At t", t, " Node ", node.ID, " Q-table\n", node.q_table, "\n")
                         node.q_table[action] = (1 - node.alpha) * node.q_table[action] + node.alpha * (
-                                    reward + node.gamma * np.max(self.nodes[next].q_table))
+                                reward + node.gamma * np.max(self.nodes[next].q_table))
+
 
                 if did_node_transmit:
                     self.parallel_coms += 1
                     # keep data for how many packets per tau and parallel coms there were per tau in a list to show change in time
-                print("At t", t, " Node ", node.ID, " Q-table\n", node.q_table)
+
+                # print("At t", t, " Node ", node.ID, " Q-table\n", node.q_table, "\n")
 
 
 

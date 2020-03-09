@@ -8,12 +8,12 @@ def run_simulation(DataSet, Day_Or_NumMules, Round, Protocol, Band, t, ts, v, ge
     # a bunch of variables for the constant file
     dir = "DataMules/"              #Starting Directory
     num_messages = num_mes          # not needed anymore
-    debug_message = -1              # if a certain msg # needs to be debugged put it here and include if statement in area to debug
+    debug_message = 36              # if a certain msg # needs to be debugged put it here and include if statement in area to debug
     debug_mode = -1                 # same as above but for more general debug purposes
     metric_interval = 30            # interval in which metrics should be generated: every "metric interval" tau
-    limited_time_to_transfer = True        # finite resources enabled
+    limited_time_to_transfer = False        # finite resources enabled
     restrict_band_access = False     # for xchants, forget how it works
-    restrict_channel_access = True  # is there a limited amount of channels
+    restrict_channel_access = False  # is there a limited amount of channels
     dataset = DataSet                   #UMass or Lexington
     day_or_numMules = Day_Or_NumMules   #date (UMass) or number of mules (Lexington)(for lexington this number really doesn't mean anything it is just needed for the file structure)
     round = Round                       #Round number (also not too important anymore, but can be used to keep information from current simulation settings if you want to regenerate a link exist without losing current metrics)
@@ -103,9 +103,9 @@ def run_simulation(DataSet, Day_Or_NumMules, Round, Protocol, Band, t, ts, v, ge
                      priority_queue_active, broadcast, geo_routing, num_nodes_to_fwd, msg_round, puser_round, debug_mode, metric_interval,
                      msg_mean, ttl, max_mem, replicas, num_trans)
 
-    if proto == "q_learning" and generate_LE == True :  # bootstrap round.
-        os.system(
-            "python3 GenerateMessages_qlearning.py")  # P_comment : Use GenerateMessages : because you find least latency cost path using Q-learning
+    # if proto == "q_learning" and generate_LE == True :  # bootstrap round.
+    #     os.system(
+    #         "python3 GenerateMessages_qlearning.py")  # P_comment : Use GenerateMessages : because you find least latency cost path using Q-learning
 
     # generate a link exists if needed
     if generate_LE == True and max_nodes == V + NoOfSources + NoOfDataCenters:
@@ -119,9 +119,10 @@ def run_simulation(DataSet, Day_Or_NumMules, Round, Protocol, Band, t, ts, v, ge
         elif dataset == "Lexington":
             # os.system("python3 readLexingtonData_Fixed.py")
             # os.system("python3 create_pickles_Lex.py")
-            os.system("python3 computeLINKEXISTS_Lex.py")
+            # os.system("python3 computeLINKEXISTS_Lex.py")
+            os.system("python3 computeLINKEXISTS_random.py")
             os.system("python3 computeSpecBW.py")
-            # os.system("python3 STB_main_path.py")
+            os.system("python3 STB_main_path.py")
 
     # run the simulation and metrics if you are not generating link exists
     if generate_LE == False:
@@ -199,24 +200,24 @@ def run_various_sims(sim_round, num_mules, num_channels, num_Pusers, msg_round, 
 start_time = 1               # start time (to find Link Exists)
 is_boot_round = True           # which day or round
 pkl_ID = 1                      # pkl folder ID if Link Exists is being generated
-len_T = 5
+len_T = 120
 generate_LE = False             # generate Link Exists
 
 data = "Lexington"
 day = "50"
                    # length of simulation
 bands = ["ALL", "LTE", "TV", "CBRS", "ISM"]  # which bands to use
-num_mules = 2                 # number of data mules to use
+num_mules = 4                 # number of data mules to use
 perfect_knowledge = False       # Xchant only
-src_dst = [1, 2]                # num src and dst
+src_dst = [5, 1]                # num src and dst
 max_v = num_mules + src_dst[0] + src_dst[1]                     # max number of datamules + src + dst
 speed = [135, 400]                  # Lex data only
 proto = "q_learning"        # [Epidemic_Smart, XChant, SprayNWait (in progress)]
-num_Pusers = 5  # P_comment : How many Primary users do we assume?
-num_channels = 10
+num_Pusers = 0  # P_comment : How many Primary users do we assume?
+num_channels = 10000
 nodes_tofwd = -1
 routing_opt = "Epi"
-msg_round = 0
+msg_round = 1
 puser_round = 0
 msg_mean = 15
 ttl = 90
